@@ -1315,16 +1315,36 @@ const INTRODUCTORY_TEXT_FOR_LARGE_LOREBOOK = `【剧情总结参考指南】
         TavernHelper_API = (typeof TavernHelper !== 'undefined') ? TavernHelper : parentWin.TavernHelper;
         jQuery_API = (typeof $ !== 'undefined') ? $ : parentWin.jQuery;
         toastr_API = parentWin.toastr || (typeof toastr !== 'undefined' ? toastr : null);
-        coreApisAreReady = !!(SillyTavern_API && TavernHelper_API && jQuery_API &&
-                                SillyTavern_API.callGenericPopup && SillyTavern_API.POPUP_TYPE &&
-                                TavernHelper_API.getChatMessages && TavernHelper_API.getLastMessageId &&
-                                TavernHelper_API.getCurrentCharPrimaryLorebook &&
-                                TavernHelper_API.createLorebookEntries && TavernHelper_API.getLorebookEntries &&
-                                TavernHelper_API.setLorebookEntries &&
-                                typeof TavernHelper_API.triggerSlash === 'function');
+        
+        // 详细检查每个必需的API
+        const apiChecks = {
+            'SillyTavern_API': !!SillyTavern_API,
+            'TavernHelper_API': !!TavernHelper_API,
+            'jQuery_API': !!jQuery_API,
+            'callGenericPopup': !!(SillyTavern_API && SillyTavern_API.callGenericPopup),
+            'POPUP_TYPE': !!(SillyTavern_API && SillyTavern_API.POPUP_TYPE),
+            'getChatMessages': !!(TavernHelper_API && TavernHelper_API.getChatMessages),
+            'getLastMessageId': !!(TavernHelper_API && TavernHelper_API.getLastMessageId),
+            'getCurrentCharPrimaryLorebook': !!(TavernHelper_API && TavernHelper_API.getCurrentCharPrimaryLorebook),
+            'createLorebookEntries': !!(TavernHelper_API && TavernHelper_API.createLorebookEntries),
+            'getLorebookEntries': !!(TavernHelper_API && TavernHelper_API.getLorebookEntries),
+            'setLorebookEntries': !!(TavernHelper_API && TavernHelper_API.setLorebookEntries),
+            'triggerSlash': !!(TavernHelper_API && typeof TavernHelper_API.triggerSlash === 'function')
+        };
+        
+        coreApisAreReady = Object.values(apiChecks).every(check => check === true);
+        
         if (!toastr_API) logWarn("toastr_API is MISSING.");
-        if (coreApisAreReady) logDebug("Core APIs successfully loaded/verified.");
-        else logError("Failed to load one or more critical APIs (check TavernHelper_API.triggerSlash).");
+        if (coreApisAreReady) {
+            logDebug("Core APIs successfully loaded/verified.");
+        } else {
+            logError("Failed to load one or more critical APIs. 详细检查结果:");
+            for (const [apiName, isReady] of Object.entries(apiChecks)) {
+                if (!isReady) {
+                    logError(`  ✗ ${apiName} 未就绪`);
+                }
+            }
+        }
         return coreApisAreReady;
     }
 async function getMaxSummarizedFloorFromActiveLorebookEntry() {
@@ -3229,7 +3249,11 @@ async function getMaxSummarizedFloorFromActiveLorebookEntry() {
         $summaryStatusDisplay.text(statusText.trim() || "状态未知。");
     }
     async function loadAllChatMessages() { /* ... (rewritten) ... */
-        if (!coreApisAreReady || !TavernHelper_API) return;
+        if (!coreApisAreReady || !TavernHelper_API) {
+            logError("核心API未就绪或TavernHelper_API不可用，无法加载聊天记录。");
+            allChatMessages = [];
+            return;
+        }
         try {
             const lastMessageId = TavernHelper_API.getLastMessageId ? TavernHelper_API.getLastMessageId() : (SillyTavern_API.chat?.length ? SillyTavern_API.chat.length -1 : -1);
             if (lastMessageId < 0) { allChatMessages = []; logDebug("No chat messages found."); return; }
@@ -3244,7 +3268,12 @@ async function getMaxSummarizedFloorFromActiveLorebookEntry() {
                 }));
                 logDebug(`Loaded ${allChatMessages.length} messages for chat: ${currentChatFileIdentifier}.`);
             } else { allChatMessages = []; logDebug("No chat messages returned from API."); }
-        } catch (error) { logError("获取聊天记录失败: " + error.message); console.error(error); showToastr("error", "获取聊天记录失败。"); allChatMessages = []; }
+        } catch (error) { 
+            logError("获取聊天记录失败: " + error.message); 
+            console.error("详细错误信息:", error); 
+            showToastr("error", `获取聊天记录失败: ${error.message}`); 
+            allChatMessages = []; 
+        }
     }
     async function handleManualSummarize() { /* ... (rewritten) ... */
         if (!$popupInstance || !$manualStartFloorInput || !$manualEndFloorInput) return;
