@@ -3255,8 +3255,21 @@ async function getMaxSummarizedFloorFromActiveLorebookEntry() {
             return;
         }
         try {
-            const lastMessageId = TavernHelper_API.getLastMessageId ? TavernHelper_API.getLastMessageId() : (SillyTavern_API.chat?.length ? SillyTavern_API.chat.length -1 : -1);
-            if (lastMessageId < 0) { allChatMessages = []; logDebug("No chat messages found."); return; }
+            // 首先检查实际的聊天长度
+            const chatLength = SillyTavern_API.chat?.length || 0;
+            if (chatLength === 0) {
+                allChatMessages = [];
+                logDebug("当前聊天为空，没有消息记录。");
+                return;
+            }
+            
+            const lastMessageId = TavernHelper_API.getLastMessageId ? TavernHelper_API.getLastMessageId() : (chatLength - 1);
+            if (lastMessageId < 0) { 
+                allChatMessages = []; 
+                logDebug("No chat messages found."); 
+                return; 
+            }
+            
             const messagesFromApi = await TavernHelper_API.getChatMessages(`0-${lastMessageId}`, { include_swipes: false });
             if (messagesFromApi && messagesFromApi.length > 0) {
                 allChatMessages = messagesFromApi.map((msg, index) => ({
@@ -3269,6 +3282,13 @@ async function getMaxSummarizedFloorFromActiveLorebookEntry() {
                 logDebug(`Loaded ${allChatMessages.length} messages for chat: ${currentChatFileIdentifier}.`);
             } else { allChatMessages = []; logDebug("No chat messages returned from API."); }
         } catch (error) { 
+            // 检查是否是因为聊天为空导致的错误，如果是则静默处理
+            if (error.message && error.message.includes('range 无效') && (SillyTavern_API.chat?.length || 0) === 0) {
+                allChatMessages = [];
+                logDebug("聊天记录为空（捕获range错误）。");
+                return;
+            }
+            // 其他错误才显示提示
             logError("获取聊天记录失败: " + error.message); 
             console.error("详细错误信息:", error); 
             showToastr("error", `获取聊天记录失败: ${error.message}`); 
